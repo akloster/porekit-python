@@ -122,7 +122,7 @@ class Fast5File(h5py.File):
             info['complement_length'] = len(lines[1])
         # 2D
         try:
-            b2d = basecall['BaseCalled_2D_000']
+            b2d = basecall['BaseCalled_2D']
             info['has_2D'] = True
         except KeyError:
             b2d = None

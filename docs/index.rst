@@ -18,7 +18,7 @@ Feature requests and bug reports are wellcome. Please use the github issues.
 
    readme
    installation
-   usage
+   01_Introduction
    contributing
    authors
    history
