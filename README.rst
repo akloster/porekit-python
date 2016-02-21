@@ -35,9 +35,9 @@ Notes from original author and maintainer:
 Main features
 -------------
 * Gathering Metadata about reads
-  * Use as Pandas DataFrame
-  * Export to many different formats
-  * Helper functions for custom scripts
+    * Use as Pandas DataFrame
+    * Export to many different formats
+    * Helper functions for custom scripts
 
 Planned
 ------------
