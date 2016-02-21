@@ -42,10 +42,10 @@ Main features
 Planned
 ------------
 * Jupyter integration
-  * Interactive squiggle viewer
-* Plot
-  * Read length distribution
-  * Squiggle Plots
+    * Interactive squiggle viewer
+* Plots
+    * Read length distribution
+    * Squiggle Plots
 * Free software: ISC license
 * Documentation: https://porekit-python.readthedocs.org.
 
