@@ -3,7 +3,7 @@ Porekit
 
 A pythonic toolkit for working with Oxford Nanopore Data
 
-This is kit of tools for handling data from Oxford Nanopore Technologies' sequencers,
+This is a kit of tools for handling data from Oxford Nanopore Technologies' sequencers,
 built for integration into the scientific Python ecosystem, including Jupyter
 Notebook.
 
