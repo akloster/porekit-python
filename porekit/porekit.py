@@ -3,6 +3,7 @@ import os
 import sys
 import h5py
 import pandas as pd
+import numpy as np
 
 
 def find_fast5_files(path):
@@ -144,14 +145,24 @@ class Fast5File(h5py.File):
     def get_complement_fastq(self):
         return self.get_fastq_from('/Analyses/Basecall_2D_000/BaseCalled_complement/Fastq')
 
-    def get_events(self):
+    def get_read_node(self):
         reads = self['Analyses/EventDetection_000/Reads']
         for key in reads.keys():
             read = reads[key]
             break
+        return read
+
+    def get_events(self):
+        read = self.get_read_node()
         if read is None:
             return None
         return pd.DataFrame.from_records(read['Events'][:])
+
+    def get_model(self):
+        model_frame = pd.DataFrame(self["Analyses/Basecall_2D_000/BaseCalled_template/Model"][:])
+        model_frame.index = model_frame.kmer
+        return model_frame
+
 
 def open_fast5_files(path, mode="r"):
     """
@@ -255,3 +266,34 @@ def gather_metadata(path, tracking_info=True, channel_info=True, basecalling_inf
                   ]
     df = pd.DataFrame.from_records(records, index='filename', columns=columns)
     return df
+
+
+def make_squiggle(sequence, model, std_multiplier = 1.0):
+    """ 
+        Turn a SciKit Bio Sequence object into a squiggle.
+
+        `sequence` must be a SciKit Bio Sequence,
+        `model` is a `pandas.DataFrame` like returned from `Fast5File.get_model()`
+        and `std_multiplier` is a float to multiply the level_stdv by. Setting
+        `std_multiplier` above 1 means the squiggles are noisier than expected
+        by the model.
+    """
+    # Find k for kmers from model
+    k = len(model.index.values[0])
+    
+    # number of events
+    n = len(sequence) - k
+    
+    # prepare means
+    means = np.zeros(n, dtype="float64")
+    stdvs = np.zeros(n, dtype="float64")
+    
+    
+    for i in range(n):
+        kmer = sequence[i:i+k].values.tostring()
+        means[i] = model.ix[kmer]["level_mean"]
+        stdvs[i] = model.ix[kmer]["level_stdv"]
+    x = np.random.normal(means, stdvs*std_multiplier)
+    return x
+
+
