@@ -19,6 +19,7 @@ Feature requests and bug reports are wellcome. Please use the github issues.
    readme
    installation
    01_Introduction
+   02_Plots
    contributing
    authors
    history
