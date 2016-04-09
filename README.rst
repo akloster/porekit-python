@@ -1,6 +1,7 @@
 ===============================
 Porekit
 ===============================
+
 A pythonic toolkit for working with Oxford Nanopore Data
 
 .. image:: https://readthedocs.org/projects/porekit-python/badge/?version=latest
@@ -34,18 +35,25 @@ Notes from original author and maintainer:
 
 Main features
 -------------
+
 * Gathering Metadata about reads
     * Use as Pandas DataFrame
     * Export to many different formats
     * Helper functions for custom scripts
 
+* Plots
+  * Read length distribution
+  * Channel Occupancy over time
+  * reads over time
+  * Yield over time
+  * template length vs complement length
+
+
 Planned
 ------------
+
 * Jupyter integration
     * Interactive squiggle viewer
-* Plots
-    * Read length distribution
-    * Squiggle Plots
 * Free software: ISC license
 * Documentation: https://porekit-python.readthedocs.org.
 

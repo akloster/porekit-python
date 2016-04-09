@@ -21,6 +21,7 @@ def find_fast5_files(path):
 def b_to_str(v):
     return v.decode('ascii')
 
+
 class Fast5File(h5py.File):
     def __init__(self, filename, mode=None, **kwargs):
         super().__init__(filename, mode, **kwargs)
@@ -133,11 +134,30 @@ class Fast5File(h5py.File):
             lines = list(fastq.splitlines())
             info['2D_length'] = len(lines[1])
         return info
+
+    def get_read_info(self):
+        items = [('start_time', int),
+                 ('duration', float),
+                ]
+        attrs = self.get_read_node().attrs
+        info = {key: converter(attrs[key]) for key, converter in items}
+        new_names = [('start_time','read_start_time'),
+                     ('duration', 'read_duration'),
+                     ]
+        for old, new in new_names:
+            info[new] = info[old]
+            del info[old]
+        info["read_end_time"] = info["read_start_time"] + info["read_duration"]
+        return info
+
     def get_fastq_from(self,path):
         return self[path].value.tobytes().decode('ascii')
 
     def get_template_fastq(self):
-        return self.get_fastq_from('/Analyses/Basecall_2D_000/BaseCalled_template/Fastq')
+        try:
+            return self.get_fastq_from('/Analyses/Basecall_2D_000/BaseCalled_template/Fastq')
+        except KeyError:
+            return self.get_fastq_from('/Analyses/Basecall_1D_000/BaseCalled_template/Fastq')
 
     def get_2D_fastq(self):
         return self.get_fastq_from('/Analyses/Basecall_2D_000/BaseCalled_2D/Fastq')
@@ -145,6 +165,27 @@ class Fast5File(h5py.File):
     def get_complement_fastq(self):
         return self.get_fastq_from('/Analyses/Basecall_2D_000/BaseCalled_complement/Fastq')
 
+    def get_fastq(self, which=["template", "complement", "2D"]):
+        output = ""
+        if "template" in which:
+            try:
+                output += self.get_template_fastq()
+            except KeyError:
+                pass
+
+        if "complement" in which:
+            try:
+                output += self.get_complement_fastq()
+            except KeyError:
+                pass
+        if "2D" in which:
+            try:
+                output += self.get_2D_fastq()
+            except:
+                pass
+        return output
+        
+            
     def get_read_node(self):
         reads = self['Analyses/EventDetection_000/Reads']
         for key in reads.keys():
@@ -195,7 +236,7 @@ def sanity_check(hdf):
 
 
 def gather_metadata_records(path, tracking_info=True, channel_info=True,
-                            basecalling_info=True):
+                            basecalling_info=True, read_info=True):
     for hdf in open_fast5_files(path):
         record = dict(absolute_filename=hdf.filename,
                       filename=os.path.split(hdf.filename)[-1],
@@ -207,11 +248,13 @@ def gather_metadata_records(path, tracking_info=True, channel_info=True,
             record.update(hdf.get_channel_info())
         if basecalling_info:
             record.update(hdf.get_basecalling_info())
+        if read_info:
+            record.update(hdf.get_read_info())
         hdf.close()
         yield record
 
 
-def gather_metadata(path, tracking_info=True, channel_info=True, basecalling_info=True):
+def gather_metadata(path, tracking_info=True, channel_info=True, basecalling_info=True, read_info=True):
     """
         Collects metadata from Fast5 files under the given paths.
 
@@ -230,7 +273,8 @@ def gather_metadata(path, tracking_info=True, channel_info=True, basecalling_inf
     records = gather_metadata_records(path,
                     tracking_info=tracking_info,
                     channel_info=channel_info,
-                    basecalling_info=basecalling_info)
+                    basecalling_info=basecalling_info,
+                    read_info=read_info)
 
     columns = [ 'filename',
                 'absolute_filename',
@@ -264,6 +308,10 @@ def gather_metadata(path, tracking_info=True, channel_info=True, basecalling_inf
                     'has_2D',
                     '2D_length',
                   ]
+    if read_info:
+        columns += ['read_start_time',
+                    'read_duration',
+                    'read_end_time']
     df = pd.DataFrame.from_records(records, index='filename', columns=columns)
     return df
 
