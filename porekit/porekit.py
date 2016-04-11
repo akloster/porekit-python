@@ -235,26 +235,39 @@ def sanity_check(hdf):
         return False
 
 
+def get_fast5_file_metadata(file_name, tracking_info=True, channel_info=True,
+                            basecalling_info=True, read_info=True, workers=None):
+    hdf = Fast5File(file_name)
+    record = dict(absolute_filename=hdf.filename,
+                  filename=os.path.split(hdf.filename)[-1],
+                  format= hdf['/Sequences/Meta'].attrs['version'].tobytes().decode()
+            )
+    if tracking_info:
+        record.update(hdf.get_tracking_info())
+    if channel_info:
+        record.update(hdf.get_channel_info())
+    if basecalling_info:
+        record.update(hdf.get_basecalling_info())
+    if read_info:
+        record.update(hdf.get_read_info())
+    hdf.close()
+    return record
+
+
 def gather_metadata_records(path, tracking_info=True, channel_info=True,
-                            basecalling_info=True, read_info=True):
-    for hdf in open_fast5_files(path):
-        record = dict(absolute_filename=hdf.filename,
-                      filename=os.path.split(hdf.filename)[-1],
-                      format= hdf['/Sequences/Meta'].attrs['version'].tobytes().decode()
-                )
-        if tracking_info:
-            record.update(hdf.get_tracking_info())
-        if channel_info:
-            record.update(hdf.get_channel_info())
-        if basecalling_info:
-            record.update(hdf.get_basecalling_info())
-        if read_info:
-            record.update(hdf.get_read_info())
-        hdf.close()
-        yield record
+                            basecalling_info=True, read_info=True, workers=None):
+    if workers is None:
+        for file_name in find_fast5_files(path):
+            record = get_fast5_file_metadata(file_name, tracking_info, channel_info, basecalling_info, read_info, workers)
+            yield record
+    else:
+        file_names = list(find_fast5_files(path))
+        import multiprocessing
+        pool = multiprocessing.Pool(workers)
+        yield from pool.map(get_fast5_file_metadata, file_names)
 
 
-def gather_metadata(path, tracking_info=True, channel_info=True, basecalling_info=True, read_info=True):
+def gather_metadata(path, tracking_info=True, channel_info=True, basecalling_info=True, read_info=True, workers=None):
     """
         Collects metadata from Fast5 files under the given paths.
 
@@ -274,7 +287,7 @@ def gather_metadata(path, tracking_info=True, channel_info=True, basecalling_inf
                     tracking_info=tracking_info,
                     channel_info=channel_info,
                     basecalling_info=basecalling_info,
-                    read_info=read_info)
+                    read_info=read_info, workers=workers)
 
     columns = [ 'filename',
                 'absolute_filename',
