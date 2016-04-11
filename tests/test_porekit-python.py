@@ -11,9 +11,8 @@ import unittest
 import os
 import sys
 import porekit
-import ipdb
 
-test_data_path = '/media/internal_2/nanopore/test_data/'
+test_data_path = os.path.join(os.path.dirname(__file__), "data")
 
 
 class TestPorekit(unittest.TestCase):
