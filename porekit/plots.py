@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
+import porekit
 
 
 def read_length_distribution(meta, ax=None):
@@ -113,4 +115,45 @@ def yield_curves(meta, ax=None):
     ax.legend(loc=0);
     ax.xaxis.set_label_text("Time (in hours)")
     ax.yaxis.set_label_text("Yield (in Mb)")
+    return ax.get_figure(), ax
+
+def squiggle_dots(fast5, ax=None):
+    if isinstance(fast5, porekit.Fast5File):
+        close_later = False
+        f5 = fast5
+    else:
+        f5 = porekit.Fast5File(fast5)
+        close_later = True
+
+    if ax is None:
+        f, ax = plt.subplots()
+        f.set_figwidth(14)
+        f.set_figheight(4)
+
+    events = f5.get_events()
+    start = events.start.min()
+    try:
+        hairpin_index = fast5.get_read_node().attrs["hairpin_event_index"]
+    except KeyError:
+        hairpin_index = None
+
+
+    means = events["mean"]
+    times = events["start"]-start
+    times /= 10000
+    mine = means.min()
+    maxe = means.max()
+    ax.set_xlim(0, times.max())
+    ax.set_ylim(mine-10, maxe+10)
+    ax.grid(None)
+    ax.set_axis_bgcolor("white")
+    r = matplotlib.patches.Rectangle((times[hairpin_index], mine-10), 0.1,5, color="black")
+    ax.add_patch(r)
+    ax.scatter(times, means, alpha=1, s=1, color=(0,0,0))
+    if hairpin_index:
+        hairpin_index = fast5.get_read_node().attrs['hairpin_event_index']
+
+    ax.xaxis.set_label_text("Time (in seconds)")
+    ax.yaxis.set_label_text("Voltage")
+
     return ax.get_figure(), ax
