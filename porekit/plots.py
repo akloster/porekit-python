@@ -147,12 +147,13 @@ def squiggle_dots(fast5, ax=None):
     ax.set_ylim(mine-10, maxe+10)
     ax.grid(None)
     ax.set_axis_bgcolor("white")
-    r = matplotlib.patches.Rectangle((times[hairpin_index], mine-10), 0.1,5, color="black")
-    ax.add_patch(r)
     ax.scatter(times, means, alpha=1, s=1, color=(0,0,0))
     if hairpin_index:
         hairpin_index = fast5.get_read_node().attrs['hairpin_event_index']
-
+        hairpin_x = times[hairpin_index]
+        r = matplotlib.patches.Rectangle((hairpin_x, mine-10), 1,5, color="black", alpha=1)
+        ax.add_patch(r)
+        ax.annotate("hairpin detected", xy=(hairpin_x+1.5, mine-10))
     ax.xaxis.set_label_text("Time (in seconds)")
     ax.yaxis.set_label_text("Voltage")
 
