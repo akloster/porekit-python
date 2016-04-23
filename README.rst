@@ -22,8 +22,6 @@ Feature requests and bug reports are wellcome. Please use the github issues.
 
 Notes from original author and maintainer:
     * I am not affiliated with Oxford Nanopore Technologies
-    * Neither am I affiliated or in contact with any participant in the
-      MinION MAP
     * This work has been done without any "official documentation", and I don't
       even know if there is such a thing
     * The documentation of porekit represents my best guess about how MinION
@@ -40,22 +38,22 @@ Main features
     * Use as Pandas DataFrame
     * Export to many different formats
     * Helper functions for custom scripts
+* Plots http://porekit-python.readthedocs.org/en/latest/02_Plots.html
+    * Read length distribution
+    * Channel Occupancy over time
+    * reads over time
+    * Yield over time
+    * template length vs complement length
+    * squiggle dots
 
-* Plots
-  * Read length distribution
-  * Channel Occupancy over time
-  * reads over time
-  * Yield over time
-  * template length vs complement length
 
+* Documentation: https://porekit-python.readthedocs.org.
 
 Planned
 ------------
 
-* Jupyter integration
+* Tighter Jupyter integration
     * Interactive squiggle viewer
-* Free software: ISC license
-* Documentation: https://porekit-python.readthedocs.org.
 
 
 Credits
