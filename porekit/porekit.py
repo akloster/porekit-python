@@ -1,25 +1,15 @@
 # -*- coding: utf-8 -*-
 import os
+import re
+import io
 import sys
 import h5py
 import pandas as pd
 import numpy as np
-
-
-def find_fast5_files(path):
-    """
-        Recursively searches files with ending '.fast5'.
-        Use this if you want to find filenames
-        without opening them.
-    """
-    for dirpath, dirnames, filenames in os.walk(path):
-        for fname in filenames:
-            if fname.endswith('.fast5'):
-                yield os.path.join(dirpath, fname)
-
-
-def b_to_str(v):
-    return v.decode('ascii')
+import skbio
+from itertools import chain
+from .utils import b_to_str, node_to_seq 
+from .plugins import DEFAULT_PLUGINS
 
 
 class Fast5File(h5py.File):
@@ -72,6 +62,7 @@ class Fast5File(h5py.File):
                  ('digitisation', float),
                  ('offset', float),
                 ]
+
         attrs = self['/UniqueGlobalKey/channel_id'].attrs
         info = {key: converter(attrs[key]) for key, converter in items}
         new_names = [('range','channel_range'),
@@ -84,60 +75,51 @@ class Fast5File(h5py.File):
             del info[old]
         return info
 
+
+    def find_analysis_base(self, base):
+        for key in list(self['Analyses'].keys()):
+            match = re.match(base+r'_(?P<number>\d\d\d)', key)
+            if match:
+                yield base, match.groups()[0]
+
+    
     def get_basecalling_info(self):
         info = {'has_basecalling': False}
+        has_template = False
+        basecallers = chain(self.find_analysis_base("Basecall_2D"), self.find_analysis_base("Basecall_1D"))
+        for basename, number in basecallers:
+            info['has_basecalling'] = True
+            node = self["Analyses"][basename+'_'+number]
+            if 'BaseCalled_template' in node:
+                info["has_template"] = True
+                seq = node_to_seq(node['BaseCalled_template/Fastq'])
+                info["template_length"] = len(seq)
+                info["template_mean_qscore"] = seq.positional_metadata.quality.mean()
 
-        try:
-            basecall = self['/Analyses/Basecall_2D_000']
-        except KeyError:
-            return info
-        info['has_basecalling'] = True
-        info['basecall_time_stamp'] = basecall.attrs['time_stamp'].decode('ascii')
-        try:
-            info['basecall_version'] = basecall.attrs['version'].decode('ascii')
-        except KeyError:
-            pass
-        info['basecall_name'] = basecall.attrs['name'].decode('ascii')
+            if 'BaseCalled_complement' in node:
+                info["has_complement"] = True
+                seq = node_to_seq(node['BaseCalled_complement/Fastq'])
+                info["complement_length"] = len(seq)
+                info["complement_mean_qscore"] = seq.positional_metadata.quality.mean()
 
-        # Template
-        try:
-            template = basecall['BaseCalled_template']
-            info['has_template'] = True
-        except KeyError:
-            template = None
-            info['has_template'] = False
-        if template:
-            fastq = template['Fastq'].value.tobytes().decode('ascii')
-            lines = list(fastq.splitlines())
-            info['template_length'] = len(lines[1])
+            if 'BaseCalled_2D' in node:
+                info["has_2D"] = True
+                seq = node_to_seq(node['BaseCalled_2D/Fastq'])
+                info["2D_length"] = len(seq)
+                info["2D_mean_qscore"] = seq.positional_metadata.quality.mean()
 
-        # Complement
-        try:
-            complement = basecall['BaseCalled_complement']
-            info['has_complement'] = True
-        except KeyError:
-            complement = None
-            info['has_complement'] = False
-        if complement:
-            fastq = complement['Fastq'].value.tobytes().decode('ascii')
-            lines = list(fastq.splitlines())
-            info['complement_length'] = len(lines[1])
-        # 2D
-        try:
-            b2d = basecall['BaseCalled_2D']
-            info['has_2D'] = True
-        except KeyError:
-            b2d = None
-            info['has_2D'] = False
-        if b2d:
-            fastq = b2d['Fastq'].value.tobytes().decode('ascii')
-            lines = list(fastq.splitlines())
-            info['2D_length'] = len(lines[1])
+
         return info
+
+
 
     def get_read_info(self):
         items = [('start_time', int),
                  ('duration', float),
+                 ('read_id', b_to_str),
+                 ('read_number', int),
+
+                 
                 ]
         attrs = self.get_read_node().attrs
         info = {key: converter(attrs[key]) for key, converter in items}
@@ -150,6 +132,19 @@ class Fast5File(h5py.File):
         info["read_end_time"] = info["read_start_time"] + info["read_duration"]
         return info
 
+    def get_read_id(self):
+        rn = self.get_read_node()
+        return rn.attrs['read_id']
+
+    def path_to_seq(self, path):
+        node = self[path]
+        try:
+            f = io.BytesIO(node.value.tobytes())
+            seqs = skbio.io.read(f, format="fastq", variant="sanger")
+            f.close()
+        except RuntimeError:
+            pass
+        return list(seqs)[0]
     def get_fastq_from(self,path):
         return self[path].value.tobytes().decode('ascii')
 
@@ -223,6 +218,18 @@ def open_fast5_files(path, mode="r"):
                 pass
 
 
+def find_fast5_files(path):
+    """
+        Recursively searches files with ending '.fast5'.
+        Use this if you want to find filenames
+        without opening them.
+    """
+    for dirpath, dirnames, filenames in os.walk(path):
+        for fname in filenames:
+            if fname.endswith('.fast5'):
+                yield os.path.join(dirpath, fname)
+
+
 def sanity_check(hdf):
     """ Minimalistic sanity check for Fast5 files."""
     required_paths = ['Analyses', 'UniqueGlobalKey', 'Analyses/EventDetection_000']
@@ -235,97 +242,81 @@ def sanity_check(hdf):
         return False
 
 
-def get_fast5_file_metadata(file_name, tracking_info=True, channel_info=True,
-                            basecalling_info=True, read_info=True, workers=None):
-    hdf = Fast5File(file_name)
-    record = dict(absolute_filename=hdf.filename,
-                  filename=os.path.split(hdf.filename)[-1],
-                  format= hdf['/Sequences/Meta'].attrs['version'].tobytes().decode()
+def get_fast5_file_metadata(file_name, plugins=None, raise_errors=False):
+    record = dict(absolute_filename=file_name,
+                  filename=os.path.split(file_name)[-1],
             )
-    if tracking_info:
-        record.update(hdf.get_tracking_info())
-    if channel_info:
-        record.update(hdf.get_channel_info())
-    if basecalling_info:
-        record.update(hdf.get_basecalling_info())
-    if read_info:
-        record.update(hdf.get_read_info())
-    hdf.close()
+    try:
+        fast5 = Fast5File(file_name)
+    except OSError:
+        return record
+    
+    if plugins is None:
+        plugins = [plugin_class() for plugin_class in DEFAULT_PLUGINS]
+
+    try:
+        for plugin in plugins:
+            result = []
+            try:
+                result = plugin.run_on_fast5(fast5)
+            except:
+                if raise_errors:
+                    raise
+            else:
+                for k in result.keys():
+                    record[plugin.base_name + '_' + k] = result[k]
+    finally:
+        fast5.close()
     return record
 
 
-def gather_metadata_records(path, tracking_info=True, channel_info=True,
-                            basecalling_info=True, read_info=True, workers=None):
-    if workers is None:
-        for file_name in find_fast5_files(path):
-            record = get_fast5_file_metadata(file_name, tracking_info, channel_info, basecalling_info, read_info, workers)
+def gather_metadata_records(path, plugins=None, workers=1, raise_errors=False, progress_callback=None):
+    # `workers` feature is more or less broken right now,
+    # because it has to recreate all Plugins whenever it is called
+    file_names = list(find_fast5_files(path))
+    files_read = 0
+    files_total = len(file_names)
+    if workers==1:
+
+        for file_name in file_names:
+            if progress_callback:
+                progress_callback(files_read, files_total)
+            record = get_fast5_file_metadata(file_name, plugins, raise_errors=raise_errors)
+            files_read += 1
             yield record
-    else:
-        file_names = list(find_fast5_files(path))
+    elif workers>1:
         import multiprocessing
         pool = multiprocessing.Pool(workers)
-        yield from pool.map(get_fast5_file_metadata, file_names)
+        for record in pool.map(get_fast5_file_metadata, file_names):
+            if progress_callback:
+                progress_callback(files_read, files_total)
+            yield record
+            files_read += 1
+    else:
+        raise ValueError("`workers` parameter needs a positive integer")
 
 
-def gather_metadata(path, tracking_info=True, channel_info=True, basecalling_info=True, read_info=True, workers=None):
+def gather_metadata(path, workers=1, plugins=None, raise_errors=False, progress_callback=None):
     """
         Collects metadata from Fast5 files under the given paths.
 
-        Individual contents can be switched off (on by default):
-          * tracking_info: Information about device and flowcell
-          * channel_info: Information about the channel this read was generated
-                          from
-
-        Returns a DataFrame with Metadata on each read. The relative filenames
-        are used as index, because they are assumed to be unique even accross
-        different paths, but the exact path/location of these files may change.
-
+        Returns a DataFrame with Metadata on each read.
+        
         The columns represent a somewhat arbitrary selection of data.
-
     """
-    records = gather_metadata_records(path,
-                    tracking_info=tracking_info,
-                    channel_info=channel_info,
-                    basecalling_info=basecalling_info,
-                    read_info=read_info, workers=workers)
-
+    records = gather_metadata_records(path, plugins=plugins, workers=workers, raise_errors=raise_errors, progress_callback=progress_callback)
+    records = list(records)
+    print(len(records))
     columns = [ 'filename',
                 'absolute_filename',
-                'format'
                 ]
-    if tracking_info:
-        columns += ['run_id',
-                   'asic_id',
-                   'version_name',
-                   'device_id',
-                   'flow_cell_id',
-                   'asic_temp',
-                   'heatsink_temp',
-                   ]
-    if channel_info:
-        columns += ['channel_number',
-                    'channel_range',
-                    'channel_sampling_rate',
-                    'channel_digitisation',
-                    'channel_offset',
-                   ]
-    if basecalling_info:
-        columns += ['has_basecalling',
-                    'basecall_timestamp',
-                    'basecall_version',
-                    'basecall_name',
-                    'has_template',
-                    'template_length',
-                    'has_complement',
-                    'complement_length',
-                    'has_2D',
-                    '2D_length',
-                  ]
-    if read_info:
-        columns += ['read_start_time',
-                    'read_duration',
-                    'read_end_time']
-    df = pd.DataFrame.from_records(records, index='filename', columns=columns)
+    if plugins is None:
+        plugins = [plugin_class() for plugin_class in DEFAULT_PLUGINS]
+    for plugin in plugins: 
+        columns += [(plugin.base_name + '_' + k)
+                for k in plugin.expected_keys]
+
+    df = pd.DataFrame.from_records(records, columns=columns)
     return df
 
 

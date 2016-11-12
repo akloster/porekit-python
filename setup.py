@@ -19,6 +19,9 @@ requirements = [
     'pandas',
     'h5py',
     'requests',
+    'feather-format',
+    'scikit-bio',
+    'Click',
 ]
 
 test_requirements = [
@@ -26,6 +29,9 @@ test_requirements = [
     'pandas',
     'h5py',
     'requests',
+    'feather-format',
+    'Click',
+    'pytest',
 ]
 
 setup(
@@ -43,16 +49,20 @@ setup(
                  'porekit'},
     include_package_data=True,
     install_requires=requirements,
-    license="ISCL",
+    license="BSD",
     zip_safe=False,
     keywords='porekit, oxford, nanopore, minion',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: ISC License (ISCL)',
+        'License :: OSI Approved :: BSD',
         'Natural Language :: English',
         'Programming Language :: Python :: 3.5',
     ],
+    entry_points='''
+        [console_scripts]
+        porekit=porekit.scripts.main:main
+    ''',
     test_suite='tests',
     tests_require=test_requirements
 )

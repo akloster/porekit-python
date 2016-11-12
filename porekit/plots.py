@@ -133,7 +133,7 @@ def squiggle_dots(fast5, ax=None):
     events = f5.get_events()
     start = events.start.min()
     try:
-        hairpin_index = fast5.get_read_node().attrs["hairpin_event_index"]
+        hairpin_index = f5.get_read_node().attrs["hairpin_event_index"]
     except KeyError:
         hairpin_index = None
 
