@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from .utils import b_to_str, node_to_seq, rename_key
-import skbio
 from itertools import chain
 
 

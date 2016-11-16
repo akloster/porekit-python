@@ -6,14 +6,13 @@ import sys
 import h5py
 import pandas as pd
 import numpy as np
-import skbio
 from itertools import chain
 from .utils import b_to_str, node_to_seq 
 from .plugins import DEFAULT_PLUGINS
 
 
 class Fast5File(h5py.File):
-    def __init__(self, filename, mode=None, **kwargs):
+    def __init__(self, filename, mode="r", **kwargs):
         super().__init__(filename, mode, **kwargs)
 
     def get_tracking_info(self):
@@ -138,12 +137,9 @@ class Fast5File(h5py.File):
 
     def path_to_seq(self, path):
         node = self[path]
-        try:
-            f = io.BytesIO(node.value.tobytes())
-            seqs = skbio.io.read(f, format="fastq", variant="sanger")
-            f.close()
-        except RuntimeError:
-            pass
+        f = io.BytesIO(node.value.tobytes())
+        seqs = Bio.SeqIO.parse(f, "fastq-sanger")
+        f.close()
         return list(seqs)[0]
     def get_fastq_from(self,path):
         return self[path].value.tobytes().decode('ascii')
@@ -267,7 +263,16 @@ def get_fast5_file_metadata(file_name, plugins=None, raise_errors=False):
                     record[plugin.base_name + '_' + k] = result[k]
     finally:
         fast5.close()
+    for k,v in record.items():
+        if isinstance(v, (bytes, bytearray)):
+            record[k] = v.decode("utf-8")
+    try:
+        if "channel_number" in record:
+            record["channel_number"] = int(record["channel_number"])
+    except:
+        record["channel_number"] = 0
     return record
+
 
 
 def gather_metadata_records(path, plugins=None, workers=1, raise_errors=False, progress_callback=None):

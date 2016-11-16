@@ -20,8 +20,8 @@ requirements = [
     'h5py',
     'requests',
     'feather-format',
-    'scikit-bio',
-    'Click',
+    'biopython',
+    'click',
 ]
 
 test_requirements = [
