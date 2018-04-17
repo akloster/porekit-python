@@ -2,12 +2,12 @@
 import os
 import re
 import io
-import sys
 import h5py
 import pandas as pd
 import numpy as np
+import Bio
 from itertools import chain
-from .utils import b_to_str, node_to_seq 
+from .utils import b_to_str, node_to_seq
 from .plugins import DEFAULT_PLUGINS
 
 
@@ -42,7 +42,7 @@ class Fast5File(h5py.File):
                  ('device_id', b_to_str),
                 ]
         attrs = self['/UniqueGlobalKey/tracking_id'].attrs
-        return {key: converter(attrs[key])  for key, converter in items}
+        return {key: converter(attrs[key]) for key, converter in items}
 
     def get_channel_info(self):
         """
@@ -74,14 +74,12 @@ class Fast5File(h5py.File):
             del info[old]
         return info
 
-
     def find_analysis_base(self, base):
         for key in list(self['Analyses'].keys()):
             match = re.match(base+r'_(?P<number>\d\d\d)', key)
             if match:
                 yield base, match.groups()[0]
 
-    
     def get_basecalling_info(self):
         info = {'has_basecalling': False}
         has_template = False
@@ -107,24 +105,21 @@ class Fast5File(h5py.File):
                 info["2D_length"] = len(seq)
                 info["2D_mean_qscore"] = seq.positional_metadata.quality.mean()
 
-
         return info
 
-
-
     def get_read_info(self):
-        items = [('start_time', int),
-                 ('duration', float),
-                 ('read_id', b_to_str),
-                 ('read_number', int),
-
-                 
-                ]
+        items = [
+            ('start_time', int),
+            ('duration', float),
+            ('read_id', b_to_str),
+            ('read_number', int),
+        ]
         attrs = self.get_read_node().attrs
         info = {key: converter(attrs[key]) for key, converter in items}
-        new_names = [('start_time','read_start_time'),
-                     ('duration', 'read_duration'),
-                     ]
+        new_names = [
+            ('start_time', 'read_start_time'),
+            ('duration', 'read_duration'),
+        ]
         for old, new in new_names:
             info[new] = info[old]
             del info[old]
@@ -141,7 +136,8 @@ class Fast5File(h5py.File):
         seqs = Bio.SeqIO.parse(f, "fastq-sanger")
         f.close()
         return list(seqs)[0]
-    def get_fastq_from(self,path):
+
+    def get_fastq_from(self, path):
         return self[path].value.tobytes().decode('ascii')
 
     def get_template_fastq(self):
@@ -175,8 +171,7 @@ class Fast5File(h5py.File):
             except:
                 pass
         return output
-        
-            
+
     def get_read_node(self):
         reads = self['Analyses/EventDetection_000/Reads']
         for key in reads.keys():
@@ -198,9 +193,9 @@ class Fast5File(h5py.File):
 
 def open_fast5_files(path, mode="r"):
     """
-        Recursively searches for files with ending '.fast5' and yields
-        opened Fast5File objects. It omits those files which don't open correctly
-        or don't pass a couple of simple and fast sanity checks.
+    Recursively searches for files with ending '.fast5' and yields
+    opened Fast5File objects. It omits those files which don't open correctly
+    or don't pass a couple of simple and fast sanity checks.
     """
     for filename in find_fast5_files(path):
         try:
@@ -239,14 +234,15 @@ def sanity_check(hdf):
 
 
 def get_fast5_file_metadata(file_name, plugins=None, raise_errors=False):
-    record = dict(absolute_filename=file_name,
-                  filename=os.path.split(file_name)[-1],
-            )
+    record = {
+        "absolute_filename": file_name,
+        "filename": os.path.split(file_name)[-1]
+    }
     try:
         fast5 = Fast5File(file_name)
     except OSError:
         return record
-    
+
     if plugins is None:
         plugins = [plugin_class() for plugin_class in DEFAULT_PLUGINS]
 
@@ -263,7 +259,7 @@ def get_fast5_file_metadata(file_name, plugins=None, raise_errors=False):
                     record[plugin.base_name + '_' + k] = result[k]
     finally:
         fast5.close()
-    for k,v in record.items():
+    for k, v in record.items():
         if isinstance(v, (bytes, bytearray)):
             record[k] = v.decode("utf-8")
     try:
@@ -274,22 +270,20 @@ def get_fast5_file_metadata(file_name, plugins=None, raise_errors=False):
     return record
 
 
-
 def gather_metadata_records(path, plugins=None, workers=1, raise_errors=False, progress_callback=None):
     # `workers` feature is more or less broken right now,
     # because it has to recreate all Plugins whenever it is called
     file_names = list(find_fast5_files(path))
     files_read = 0
     files_total = len(file_names)
-    if workers==1:
-
+    if workers == 1:
         for file_name in file_names:
             if progress_callback:
                 progress_callback(files_read, files_total)
             record = get_fast5_file_metadata(file_name, plugins, raise_errors=raise_errors)
             files_read += 1
             yield record
-    elif workers>1:
+    elif workers > 1:
         import multiprocessing
         pool = multiprocessing.Pool(workers)
         for record in pool.map(get_fast5_file_metadata, file_names):
@@ -303,54 +297,50 @@ def gather_metadata_records(path, plugins=None, workers=1, raise_errors=False, p
 
 def gather_metadata(path, workers=1, plugins=None, raise_errors=False, progress_callback=None):
     """
-        Collects metadata from Fast5 files under the given paths.
+    Collects metadata from Fast5 files under the given paths.
 
-        Returns a DataFrame with Metadata on each read.
-        
-        The columns represent a somewhat arbitrary selection of data.
+    Returns a DataFrame with Metadata on each read.
+
+    The columns represent a somewhat arbitrary selection of data.
     """
     records = gather_metadata_records(path, plugins=plugins, workers=workers, raise_errors=raise_errors, progress_callback=progress_callback)
     records = list(records)
     print(len(records))
-    columns = [ 'filename',
-                'absolute_filename',
-                ]
+    columns = [
+        'filename',
+        'absolute_filename',
+    ]
     if plugins is None:
         plugins = [plugin_class() for plugin_class in DEFAULT_PLUGINS]
-    for plugin in plugins: 
-        columns += [(plugin.base_name + '_' + k)
-                for k in plugin.expected_keys]
+    for plugin in plugins:
+        columns += [(plugin.base_name + '_' + k) for k in plugin.expected_keys]
 
     df = pd.DataFrame.from_records(records, columns=columns)
     return df
 
 
-def make_squiggle(sequence, model, std_multiplier = 1.0):
-    """ 
-        Turn a SciKit Bio Sequence object into a squiggle.
+def make_squiggle(sequence, model, std_multiplier=1.0):
+    """
+    Turn a SciKit Bio Sequence object into a squiggle.
 
-        `sequence` must be a SciKit Bio Sequence,
-        `model` is a `pandas.DataFrame` like returned from `Fast5File.get_model()`
-        and `std_multiplier` is a float to multiply the level_stdv by. Setting
-        `std_multiplier` above 1 means the squiggles are noisier than expected
-        by the model.
+    `sequence` must be a SciKit Bio Sequence, `model` is a `pandas.DataFrame`
+    like returned from `Fast5File.get_model()` and `std_multiplier` is a float
+    to multiply the level_stdv by. Setting `std_multiplier` above 1 means the
+    squiggles are noisier than expected by the model.
     """
     # Find k for kmers from model
     k = len(model.index.values[0])
-    
+
     # number of events
     n = len(sequence) - k
-    
+
     # prepare means
     means = np.zeros(n, dtype="float64")
     stdvs = np.zeros(n, dtype="float64")
-    
-    
+
     for i in range(n):
-        kmer = sequence[i:i+k].values.tostring()
+        kmer = sequence[i:i + k].values.tostring()
         means[i] = model.ix[kmer]["level_mean"]
         stdvs[i] = model.ix[kmer]["level_stdv"]
-    x = np.random.normal(means, stdvs*std_multiplier)
+    x = np.random.normal(means, stdvs * std_multiplier)
     return x
-
-
