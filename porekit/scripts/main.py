@@ -6,6 +6,7 @@ Copyright (C) 2016 by Andreas Klostermann
 
 """
 
+
 @click.group()
 def main():
     pass
@@ -23,6 +24,3 @@ def collect(path, output, workers):
     click.echo("Writing Metadata to file")
     feather.write_dataframe(df, output)
     click.echo("\nDone.")
-    
-
-

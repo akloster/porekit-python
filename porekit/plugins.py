@@ -4,26 +4,28 @@ from itertools import chain
 
 
 class Plugin(object):
-    """ 
-        Each plugin extracts data from a Fast5File.
+    """Each plugin extracts data from a Fast5File.
 
-        Plugin classes are usually instantiated only once, when the plugin is first used on a Fast5 file.
+    Plugin classes are usually instantiated only once, when the plugin is first
+    used on a Fast5 file.
 
-        The instance members should not be used to accumulate state,
-        like running averages etc., but they can be used to initialize
-        libraries, cache values and so on.
+    The instance members should not be used to accumulate state, like running
+    averages etc., but they can be used to initialize libraries, cache values
+    and so on.
 
-        The output of running a plugin against a file must never depend on what other files have been run
-        against this plugin instance.
+    The output of running a plugin against a file must never depend on what
+    other files have been run against this plugin instance.
 
-        the `run_on_fast5` method must return a dictionary, and it must only contain keys listed in
-        `expected_keys`. The output does not need to contain all `expected_keys`, but then the value will
-        be filled in as None, and the resulting DataFrame will still contain this column.
+    the `run_on_fast5` method must return a dictionary, and it must only
+    contain keys listed in `expected_keys`. The output does not need to contain
+    all `expected_keys`, but then the value will be filled in as None, and the
+    resulting DataFrame will still contain this column.
 
-        In the final DataFrame, each key of the output will be prepended with the string in `base_name`.
-
+    In the final DataFrame, each key of the output will be prepended with the
+    string in `base_name`.
     """
     base_name = None
+
     def __init__(self):
         if self.base_name is None:
             raise NotImplementedError("Plugin classes must set a 'base_name' class member")
@@ -35,34 +37,34 @@ class Plugin(object):
 
 class Channel(Plugin):
     base_name = 'channel'
-    expected_keys = ['number',
-                     'range',
-                     'sampling_rate',
-                     'digitisation',
-                     'offset',
-            ]
-
+    expected_keys = [
+        'number',
+        'range',
+        'sampling_rate',
+        'digitisation',
+        'offset',
+    ]
 
     def run_on_fast5(self, fast5):
         attrs = fast5['/UniqueGlobalKey/channel_id'].attrs
-        return dict(number=attrs['channel_number'],
-                 sampling_rate=attrs['sampling_rate'],
-                 digitisation=attrs['digitisation'],
-                 offset=attrs['offset'])
+        attr_keys = [
+            "channel_number", "sampling_rate", "digitisation", "offset"
+        ]
+        return {k: attrs[k] for k in attr_keys}
 
 
 class Tracking(Plugin):
     base_name = 'channel'
-    expected_keys = ['run_id',
-                     'asic_id',
-                     'version_name',
-                     'asic_temp',
-                     'heatsink_temp',
-                     'exp_script_purpose',
-                     'flow_cell_id',
-                     'device_id',
-            ]
-
+    expected_keys = [
+        'run_id',
+        'asic_id',
+        'version_name',
+        'asic_temp',
+        'heatsink_temp',
+        'exp_script_purpose',
+        'flow_cell_id',
+        'device_id',
+    ]
 
     def run_on_fast5(self, fast5):
         items = [('run_id', b_to_str),
@@ -75,7 +77,7 @@ class Tracking(Plugin):
                  ('device_id', b_to_str),
                 ]
         attrs = fast5['/UniqueGlobalKey/tracking_id'].attrs
-        return {key: converter(attrs[key])  for key, converter in items}
+        return {key: converter(attrs[key]) for key, converter in items}
 
 
 class Basecall(Plugin):
@@ -92,10 +94,9 @@ class Basecall(Plugin):
                      '2D_mean_qscore'
                      ]
 
-
     def run_on_fast5(self, fast5):
         basecallers = chain(fast5.find_analysis_base("Basecall_2D"), fast5.find_analysis_base("Basecall_1D"))
-        result =dict(has_basecall=False)
+        result = dict(has_basecall=False)
         for basename, number in basecallers:
             result['has_basecall'] = True
             node = fast5["Analyses"][basename+'_'+number]
