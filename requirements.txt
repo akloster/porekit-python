@@ -1,1 +1,8 @@
 nbsphinx
+numpy
+pandas
+h5py
+requests
+feather-format
+biopython
+click
