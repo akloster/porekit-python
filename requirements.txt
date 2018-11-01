@@ -5,4 +5,5 @@ h5py
 requests
 feather-format
 biopython
+matplotlib
 click
